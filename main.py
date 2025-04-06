@@ -39,8 +39,16 @@ def send_telegram_message(message):
         "text": message,
         "parse_mode": "Markdown"
     }
-    response = requests.post(url, data=data)
-    return response.json()  # ← pour qu’on voie la réponse dans les logs
+
+    try:
+        response = requests.post(url, data=data)
+        print("📤 Envoi Telegram...")  # ← Affiche que ça tente l'envoi
+        print("📨 Contenu :", data)  # ← Vérifie bien le message et le chat ID
+        print("🧾 Réponse Telegram :", response.text)  # ← Réponse complète JSON
+        return response.json()
+    except Exception as e:
+        print("❌ Erreur lors de l'envoi Telegram :", e)
+        return None
     response = requests.post(url, data=data)
     print("Réponse Telegram :", response.text)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -239,10 +247,9 @@ def run_bot():
         time.sleep(SCAN_INTERVAL)
 
 if __name__ == "__main__":
-    send_telegram_message("🧪 Test manuel – est-ce que tu reçois ce message ?")
+    print("🚀 Test d'envoi manuel...")
+    send_telegram_message("✅ Test depuis Render - si tu lis ça, c’est que le bot fonctionne.")
     run_bot()
-    print("➡️ Envoi test en cours...")
-
 try:
     response = send_telegram_message("📢 Test Telegram depuis Render !")
     print("✅ Réponse Telegram :", response)
