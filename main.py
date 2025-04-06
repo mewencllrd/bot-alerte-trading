@@ -8,6 +8,8 @@ from datetime import datetime
 import schedule
 import threading
 
+send_telegram_message("✅ Test manuel depuis Render !")
+
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = "TON_TOKEN"
 CHAT_ID = "-1002516223605"
