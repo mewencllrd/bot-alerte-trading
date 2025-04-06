@@ -8,7 +8,6 @@ from datetime import datetime
 import schedule
 import threading
 
-send_telegram_message("✅ Test manuel depuis Render !")
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = "TON_TOKEN"
@@ -248,14 +247,8 @@ def run_bot():
         for symbol in SYMBOLS:
             detect_signal_scalping(symbol)
         time.sleep(SCAN_INTERVAL)
-
 if __name__ == "__main__":
-    print("🚀 Test d'envoi manuel...")
-    send_telegram_message("✅ Test depuis Render - si tu lis ça, c’est que le bot fonctionne.")
+    send_telegram_message("✅ Test manuel depuis Render !")
     run_bot()
-try:
-    response = send_telegram_message("📢 Test Telegram depuis Render !")
-    print("✅ Réponse Telegram :", response)
-except Exception as e:
-    print("❌ Erreur lors de l’envoi :", e)
+
 
