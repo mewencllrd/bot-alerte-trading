@@ -34,12 +34,13 @@ def fetch_price(symbol):
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+    data = {
+        "chat_id": CHAT_ID,
         "text": message,
         "parse_mode": "Markdown"
     }
-    requests.post(url, data=payload)
+    response = requests.post(url, data=data)
+    print("🔧 Réponse Telegram :", response.status_code, response.text)
 
 def send_alert(symbol, data):
     message = f"{data['confidence']}\n"
