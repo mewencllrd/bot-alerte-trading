@@ -239,28 +239,6 @@ def detect_signal_scalping(symbol):
         
 from datetime import datetime
 
-# === TEST MANUEL CLASSIQUE & SCALPING ===
-send_alert("BTCUSDT", {
-    "confiance": "🔒 Signal très fiable",
-    "signal": "Achat",
-    "entrée": 83000,
-    "tp": 84600,
-    "sl": 82100,
-    "rr": round(abs(84600 - 83000) / abs(83000 - 82100), 2),
-    "horodatage": datetime.now().isoformat()
-})
-
-send_alert("BTCUSDT", {
-    "confiance": "⚡ Signal Scalping",
-    "signal": "Vente",
-    "entrée": 84200,
-    "tp": 83700,
-    "sl": 84500,
-    "rr": round(abs(84200 - 83700) / abs(84500 - 84200), 2),
-    "horodatage": datetime.now().isoformat()
-})
-
-# === MAIN ===
 def run_bot():
     threading.Thread(target=schedule_recap, daemon=True).start()
     send_telegram_message("✅ Bot d’alerte lancé avec succès.")
@@ -271,6 +249,28 @@ def run_bot():
             detect_signal_scalping(symbol)
         time.sleep(SCAN_INTERVAL)
 
+# === MAIN ===
 if __name__ == "__main__":
+    # === TEST MANUEL CLASSIQUE & SCALPING ===
+    send_alert("BTCUSDT", {
+        "confiance": "🔒 Signal très fiable",
+        "signal": "Achat",
+        "entrée": 83000,
+        "tp": 84600,
+        "sl": 82100,
+        "rr": round(abs(84600 - 83000) / abs(83000 - 82100), 2),
+        "horodatage": datetime.now().isoformat()
+    })
+
+    send_alert("BTCUSDT", {
+        "confiance": "⚡ Signal Scalping",
+        "signal": "Vente",
+        "entrée": 84200,
+        "tp": 83700,
+        "sl": 84500,
+        "rr": round(abs(84200 - 83700) / abs(84500 - 84200), 2),
+        "horodatage": datetime.now().isoformat()
+    })
+
     run_bot()
 
