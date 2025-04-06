@@ -228,5 +228,6 @@ def run_bot():
         time.sleep(SCAN_INTERVAL)
 
 if __name__ == "__main__":
+    send_telegram_message("🧪 Test manuel – est-ce que tu reçois ce message ?")
     run_bot()
 
