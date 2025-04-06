@@ -240,3 +240,13 @@ while True:
     check_active_trades()
     weekly_recap()
     time.sleep(60)
+    # 🔧 TEST MANUEL - à retirer après
+send_alert("BTCUSDT", {
+    "confidence": "🔒 Signal très fiable",
+    "signal": "Achat",
+    "entry": 83000,
+    "tp": 84600,
+    "sl": 82100,
+    "timeframe": "M15"
+})
+
