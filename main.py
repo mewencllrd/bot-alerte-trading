@@ -237,28 +237,10 @@ def detect_signal_scalping(symbol):
         "timeframe": "M1/M5/M10"
     })
         
-        send_alert("BTCUSDT", {
-    "confiance": "🔒 Signal très fiable",
-    "signal": "Achat",
-    "entrée": 83000,
-    "tp": 84600,
-    "sl": 82100,
-    "rr": round(abs(84600 - 83000) / abs(83000 - 82100), 2),
-    "horodatage": datetime.now().isoformat()
-})
+from datetime import datetime
 
-# === MAIN ===
-def run_bot():
-    threading.Thread(target=schedule_recap, daemon=True).start()
-    send_telegram_message("✅ Bot d'alerte lancé avec succès.")
-    while True:
-        check_market()
-        check_active_trades()
-        for symbol in SYMBOLS:
-            detect_signal_scalping(symbol)
-        time.sleep(SCAN_INTERVAL)
-        
-        send_alert("BTCUSDT", {
+# === TEST MANUEL CLASSIQUE & SCALPING ===
+send_alert("BTCUSDT", {
     "confiance": "🔒 Signal très fiable",
     "signal": "Achat",
     "entrée": 83000,
@@ -278,9 +260,17 @@ send_alert("BTCUSDT", {
     "horodatage": datetime.now().isoformat()
 })
 
+# === MAIN ===
+def run_bot():
+    threading.Thread(target=schedule_recap, daemon=True).start()
+    send_telegram_message("✅ Bot d’alerte lancé avec succès.")
+    while True:
+        check_market()
+        check_active_trades()
+        for symbol in SYMBOLS:
+            detect_signal_scalping(symbol)
+        time.sleep(SCAN_INTERVAL)
+
 if __name__ == "__main__":
     run_bot()
-# === TEST MANUEL CLASSIQUE & SCALPING ===
-from datetime import datetime
-
 
