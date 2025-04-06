@@ -1,8 +1,10 @@
+# === IMPORTS ===
 import requests
+import pandas as pd
 import time
-import threading
 import json
 import os
+import threading
 from datetime import datetime, timedelta
 import schedule
 import ta
@@ -12,248 +14,235 @@ import ccxt
 TELEGRAM_TOKEN = "8050078976:AAEu6HHh7UtnSgVvzy0zUIa_TprcuT4IP10"
 TELEGRAM_CHAT_ID = "-1002516223605"
 SYMBOLS = ["BTC/USDT", "ETH/USDT"]
-SCAN_INTERVAL = 60  # secondes
-
+SCAN_INTERVAL = 60
 exchange = ccxt.binance()
 active_trades = {}
 trade_history = []
-LOG_FILE = "trade_log.json"
-last_recap = None
 
-# === ENVOI TELEGRAM ===
-def send_telegram_message(message):
+# === TELEGRAM ===
+def send_telegram_message(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
+    payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
+        "text": msg,
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=data)
-        print("Message envoyé ", response.text)
+        response = requests.post(url, json=payload)
+        print("Message Telegram envoyé.")
     except Exception as e:
         print("Erreur Telegram:", e)
 
-# === CALCUL RR ===
-def calculate_rr(tp, entry, sl):
-    return round(abs(tp - entry) / abs(entry - sl), 2)
-
-# === FETCH PRIX ===
+# === UTILS ===
 def fetch_price(symbol):
     ticker = exchange.fetch_ticker(symbol)
-    return ticker['close']
+    return ticker['last']
 
-# === ALERT TELEGRAM ===
+def calculate_tp_sl(entry, direction, rr=2.0):
+    delta = entry * 0.003
+    if direction == "Achat":
+        sl = entry - delta
+        tp = entry + (entry - sl) * rr
+    else:
+        sl = entry + delta
+        tp = entry - (sl - entry) * rr
+    return round(tp, 2), round(sl, 2)
+
+def log_trade(symbol, direction, entry, tp, sl, result, pips, elapsed):
+    trade = {
+        "symbol": symbol,
+        "direction": direction,
+        "entry": entry,
+        "tp": tp,
+        "sl": sl,
+        "result": result,
+        "pips": pips,
+        "elapsed": elapsed,
+        "timestamp": datetime.now().isoformat()
+    }
+    trade_history.append(trade)
+
+# === ALERTES ===
 def send_alert(symbol, data):
-    try:
-        message = (
-            f"{data['confiance']}\n"
-            f"*Crypto* : {symbol}\n"
-            f"*Direction* : {data['signal']}\n"
-            f"🎯 *Entrée* : {data['entrée']}\n"
-            f"🎯 *TP* : {data['tp']}\n"
-            f"🛑 *SL* : {data['sl']}\n"
-            f"📊 *RR* : {data['rr']}\n"
-            f"🕰 Horodatage : {data['horodatage']}"
-        )
-        send_telegram_message(message)
-    except Exception as e:
-        print("Erreur lors de l'envoi d'alerte:", e)
+    message = (
+        f"{data['confiance']}\n"
+        f"*Crypto* : {symbol}\n"
+        f"*Signal* : {data['signal']}\n"
+        f"*Entrée* : {data['entrée']}\n"
+        f"*TP* : {data['tp']}\n"
+        f"*SL* : {data['sl']}\n"
+        f"*RR* : {data['rr']}\n"
+        f"*Horodatage* : {data['horodatage']}"
+    )
+    send_telegram_message(message)
 
-# === DETECTION CLASSIQUE ===
+# === STRATEGIE CLASSIQUE ===
 def detect_signal_classique(symbol):
     try:
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=100)
-        closes = [c[4] for c in ohlcv]
+        df = exchange.fetch_ohlcv(symbol, timeframe="15m", limit=100)
+        df = pd.DataFrame(df, columns=["time", "open", "high", "low", "close", "volume"])
+        close = df["close"]
+        ema50 = ta.trend.ema_indicator(close, window=50).ema_indicator()
+        ema200 = ta.trend.ema_indicator(close, window=200).ema_indicator()
+        rsi = ta.momentum.RSIIndicator(close, window=14).rsi()
+        macd = ta.trend.macd_diff(close)
 
-        ema50 = ta.trend.ema_indicator(pd.Series(closes), window=50).iloc[-1]
-        ema200 = ta.trend.ema_indicator(pd.Series(closes), window=200).iloc[-1]
-        rsi = ta.momentum.rsi(pd.Series(closes), window=14).iloc[-1]
+        latest = -1
+        score = 0
+        if ema50[latest] > ema200[latest]: score += 1
+        if rsi[latest] > 50: score += 1
+        if macd[latest] > 0: score += 1
 
-        macd = ta.trend.macd_diff(pd.Series(closes)).iloc[-1]
-        price = closes[-1]
+        if score >= 2:
+            direction = "Achat" if ema50[latest] > ema200[latest] else "Vente"
+            entry = float(close[latest])
+            rr = 2.5 if score == 3 else 2.0
+            tp, sl = calculate_tp_sl(entry, direction, rr)
+            confiance = "🔒 Signal très fiable" if score == 3 else "⚠️ Signal modéré"
 
-        conditions = {
-            "ema": ema50 > ema200,
-            "rsi": rsi > 50,
-            "macd": macd > 0
-        }
-
-        score = sum(conditions.values())
-
-        if score == 3:
-            niveau = "🔒 Signal très fiable"
-            rr = 2.5
-        elif score == 2:
-            niveau = "⚠️ Signal modéré"
-            rr = 2.0
-        else:
-            return
-
-        direction = "Achat" if conditions["ema"] and conditions["macd"] else "Vente"
-
-        if direction == "Achat":
-            sl = price - (price * 0.01)
-            tp = price + (abs(price - sl) * rr)
-        else:
-            sl = price + (price * 0.01)
-            tp = price - (abs(sl - price) * rr)
-
-        rr_calc = calculate_rr(tp, price, sl)
-
-        send_alert(symbol, {
-            "confiance": niveau,
-            "signal": direction,
-            "entrée": round(price, 2),
-            "tp": round(tp, 2),
-            "sl": round(sl, 2),
-            "rr": rr_calc,
-            "horodatage": datetime.now().isoformat()
-        })
-
-        active_trades[symbol] = {
-            "direction": direction,
-            "tp": tp,
-            "sl": sl,
-            "entrée": price,
-            "temps": datetime.now()
-        }
-
+            send_alert(symbol, {
+                "confiance": confiance,
+                "signal": direction,
+                "entrée": entry,
+                "tp": tp,
+                "sl": sl,
+                "rr": round(abs(tp - entry) / abs(entry - sl), 2),
+                "horodatage": datetime.now().isoformat()
+            })
+            active_trades[symbol] = {
+                "direction": direction,
+                "entry": entry,
+                "tp": tp,
+                "sl": sl,
+                "start": datetime.now()
+            }
     except Exception as e:
-        print("Erreur classique:", e)
+        print(f"Erreur classique sur {symbol}:", e)
 
-# === DETECTION SCALPING ===
+# === STRATEGIE SCALPING ===
 def detect_signal_scalping(symbol):
     try:
-        timeframes = ['1m', '5m', '15m']
-        confirmations = 0
-
+        timeframes = ["1m", "5m"]
+        valid = 0
         for tf in timeframes:
-            ohlcv = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=50)
-            closes = [c[4] for c in ohlcv]
-            ema = ta.trend.ema_indicator(pd.Series(closes), window=20).iloc[-1]
-            price = closes[-1]
-            if price > ema:
-                confirmations += 1
-
-        if confirmations >= 2:
-            direction = "Achat"
-            rr = 1.5
-            sl = price - (price * 0.003)
-            tp = price + (abs(price - sl) * rr)
-        elif confirmations <= 1:
+            df = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=50)
+            df = pd.DataFrame(df, columns=["time", "open", "high", "low", "close", "volume"])
+            close = df["close"]
+            ema = ta.trend.ema_indicator(close, window=20).ema_indicator()
+            macd = ta.trend.macd_diff(close)
+            rsi = ta.momentum.RSIIndicator(close, window=14).rsi()
+            if ema.iloc[-1] > close.iloc[-1] and macd.iloc[-1] < 0 and rsi.iloc[-1] < 50:
+                valid += 1
+        if valid >= 2:
+            entry = fetch_price(symbol)
             direction = "Vente"
-            rr = 1.5
-            sl = price + (price * 0.003)
-            tp = price - (abs(sl - price) * rr)
-        else:
-            return
-
-        rr_calc = calculate_rr(tp, price, sl)
-
-        send_alert(symbol, {
-            "confiance": "⚡ Signal Scalping",
-            "signal": direction,
-            "entrée": round(price, 2),
-            "tp": round(tp, 2),
-            "sl": round(sl, 2),
-            "rr": rr_calc,
-            "horodatage": datetime.now().isoformat()
-        })
-
-        active_trades[symbol] = {
-            "direction": direction,
-            "tp": tp,
-            "sl": sl,
-            "entrée": price,
-            "temps": datetime.now()
-        }
-
+            tp, sl = calculate_tp_sl(entry, direction, rr=1.5)
+            send_alert(symbol, {
+                "confiance": "🔦 Signal Scalping",
+                "signal": direction,
+                "entrée": entry,
+                "tp": tp,
+                "sl": sl,
+                "rr": round(abs(tp - entry) / abs(entry - sl), 2),
+                "horodatage": datetime.now().isoformat()
+            })
+            active_trades[symbol] = {
+                "direction": direction,
+                "entry": entry,
+                "tp": tp,
+                "sl": sl,
+                "start": datetime.now()
+            }
     except Exception as e:
-        print("Erreur scalping:", e)
+        print(f"Erreur scalping {symbol}:", e)
 
-# === CHECK TP/SL ===
+# === VERIFICATION TP/SL ===
 def check_active_trades():
-    for symbol, trade in list(active_trades.items()):
+    to_remove = []
+    for symbol, trade in active_trades.items():
         try:
-            current = fetch_price(symbol)
+            price = fetch_price(symbol)
             direction = trade['direction']
             tp = trade['tp']
             sl = trade['sl']
-            entry = trade['entrée']
-            time_open = trade['temps']
-            elapsed = datetime.now() - time_open
+            entry = trade['entry']
+            start = trade['start']
+            elapsed = datetime.now() - start
             minutes = int(elapsed.total_seconds() / 60)
+            time_str = f"({minutes} minutes)"
 
-            if direction == "Achat" and current >= tp:
-                pips = round((tp - entry) * 10000)
-                msg = f"✅ TP atteint sur {symbol} !\n+{pips} pips\n(⏱ {minutes} minutes)"
-                send_telegram_message(msg)
-                del active_trades[symbol]
-
-            elif direction == "Achat" and current <= sl:
-                pips = round((entry - sl) * 10000)
-                msg = f"❌ SL touché sur {symbol} !\n-{pips} pips\n(⏱ {minutes} minutes)"
-                send_telegram_message(msg)
-                del active_trades[symbol]
-
-            elif direction == "Vente" and current <= tp:
-                pips = round((entry - tp) * 10000)
-                msg = f"✅ TP atteint sur {symbol} !\n+{pips} pips\n(⏱ {minutes} minutes)"
-                send_telegram_message(msg)
-                del active_trades[symbol]
-
-            elif direction == "Vente" and current >= sl:
-                pips = round((sl - entry) * 10000)
-                msg = f"❌ SL touché sur {symbol} !\n-{pips} pips\n(⏱ {minutes} minutes)"
-                send_telegram_message(msg)
-                del active_trades[symbol]
-
-        except Exception as e:
-            print(f"Erreur TP/SL {symbol}:", e)
+            if direction == "Achat":
+                if price >= tp:
+                    pips = round((tp - entry) * 10000)
+                    msg = f"📈 TP atteint sur {symbol} ! +{pips} pips\n{time_str}"
+                    send_telegram_message(msg)
+                    log_trade(symbol, direction, entry, tp, sl, "TP", pips, minutes)
+                    to_remove.append(symbol)
+                elif price <= sl:
+                    pips = round((entry - sl) * 10000)
+                    msg = f"❌ SL touché sur {symbol} ! -{pips} pips\n{time_str}"
+                    send_telegram_message(msg)
+                    log_trade(symbol, direction, entry, tp, sl, "SL", -pips, minutes)
+                    to_remove.append(symbol)
+            else:
+                if price <= tp:
+                    pips = round((entry - tp) * 10000)
+                    msg = f"📈 TP atteint sur {symbol} ! +{pips} pips\n{time_str}"
+                    send_telegram_message(msg)
+                    log_trade(symbol, direction, entry, tp, sl, "TP", pips, minutes)
+                    to_remove.append(symbol)
+                elif price >= sl:
+                    pips = round((sl - entry) * 10000)
+                    msg = f"❌ SL touché sur {symbol} ! -{pips} pips\n{time_str}"
+                    send_telegram_message(msg)
+                    log_trade(symbol, direction, entry, tp, sl, "SL", -pips, minutes)
+                    to_remove.append(symbol)
+        except:
+            continue
+    for s in to_remove:
+        del active_trades[s]
 
 # === RECAP HEBDOMADAIRE ===
+last_recap = None
+
 def schedule_recap():
     global last_recap
-    if datetime.now().weekday() == 6 and datetime.now().hour == 22:
-        if not os.path.exists(LOG_FILE):
-            return
-        with open(LOG_FILE, 'r') as f:
-            data = json.load(f)
-        this_week = [t for t in data if datetime.fromisoformat(t['horodatage']) >= datetime.now() - timedelta(days=7)]
-        if not this_week:
-            return
+    now = datetime.now()
+    if now.weekday() == 6 and now.hour == 22:
+        if last_recap != now.date():
+            total = len(trade_history)
+            wins = len([t for t in trade_history if t['result'] == "TP"])
+            losses = len([t for t in trade_history if t['result'] == "SL"])
+            winrate = round((wins / total) * 100, 2) if total > 0 else 0
+            best = max(trade_history, key=lambda x: x['pips'], default=None)
+            worst = min(trade_history, key=lambda x: x['pips'], default=None)
 
-        wins = [t for t in this_week if t['résultat'] == 'TP']
-        losses = [t for t in this_week if t['résultat'] == 'SL']
-        winrate = round(len(wins) / len(this_week) * 100, 2)
-        best = max(this_week, key=lambda x: x['pips'])
-        worst = min(this_week, key=lambda x: x['pips'])
+            message = f"\n*\ud83d\udcca Récapitulatif de la semaine*\n"
+            message += f"\n*Signaux envoyés* : {total}"
+            message += f"\n*TP atteints* : {wins}"
+            message += f"\n*SL touchés* : {losses}"
+            message += f"\n*Taux de victoire* : {winrate}%"
+            if best:
+                message += f"\n*Meilleur trade* : {best['symbol']} +{best['pips']} pips"
+            if worst:
+                message += f"\n*Pire trade* : {worst['symbol']} {worst['pips']} pips"
+            send_telegram_message(message)
+            last_recap = now.date()
 
-        msg = f"📊 *Récap de la semaine*\n\n"
-        msg += f"📈 TP : {len(wins)}\n"
-        msg += f"📉 SL : {len(losses)}\n"
-        msg += f"🏆 Winrate : {winrate}%\n"
-        msg += f"💚 Best : {best['symbole']} +{best['pips']} pips\n"
-        msg += f"💔 Worst : {worst['symbole']} -{abs(worst['pips'])} pips"
-
-        send_telegram_message(msg)
-        last_recap = datetime.now().date()
-
-# === LANCEMENT ===
+# === BOUCLE PRINCIPALE ===
 def run_bot():
-    threading.Thread(target=schedule_recap, daemon=True).start()
-    send_telegram_message("✅ Bot d'alerte lancé avec succès.")
+    schedule.every(1).minutes.do(schedule_recap)
+    send_telegram_message("\ud83d\udcc5 Bot d'alerte lancé avec succès.")
     while True:
-        check_market()
         check_active_trades()
+        for s in SYMBOLS:
+            detect_signal_classique(s)
+            detect_signal_scalping(s)
+        schedule.run_pending()
         time.sleep(SCAN_INTERVAL)
 
-def check_market():
-    for symbol in SYMBOLS:
-        detect_signal_classique(symbol)
-        detect_signal_scalping(symbol)
-
-if __name__ == '__main__':
+# === EXECUTION ===
+if __name__ == "__main__":
     run_bot()
+
 
