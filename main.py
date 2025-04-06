@@ -235,6 +235,7 @@ def check_market():
             print(f"Erreur analyse {symbol} :", e)
 
 # Boucle infinie
+send_telegram_message("✅ Test manuel depuis Render !")
 while True:
     check_market()
     check_active_trades()
