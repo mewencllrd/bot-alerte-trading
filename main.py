@@ -252,14 +252,15 @@ def run_bot():
 # === MAIN ===
 if __name__ == "__main__":
     # === TEST MANUEL CLASSIQUE ===
-    send_alert("BTCUSDT", {
-        "confiance": "🔒 Signal très fiable",
-        "signal": "Achat",
-        "entrée": 83000,
-        "tp": 84600,
-        "sl": 82100,
-        "rr": round(abs(84600 - 83000) / abs(83000 - 82100), 2),
-        "horodatage": datetime.now().isoformat()
+send_alert("BTCUSDT", {
+    "confiance": "🔒 Signal très fiable",
+    "signal": "Achat",
+    "entrée": 83000,
+    "tp": 84600,
+    "sl": 82100,
+    "rr": round(abs(84600 - 83000) / abs(83000 - 82100), 2),
+    "horodatage": datetime.now().isoformat()
+    
     })
 
     # === TEST MANUEL SCALPING ===
