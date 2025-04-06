@@ -35,6 +35,7 @@ def fetch_price(symbol):
     return ticker['last']
 
 def send_telegram_message(message):
+    print("Tentative d’envoi du message Telegram :", message)  # <- AJOUTE ÇA
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
 "chat_id": CHAT_ID,
