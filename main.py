@@ -248,7 +248,7 @@ def run_bot():
             detect_signal_scalping(symbol)
         time.sleep(SCAN_INTERVAL)
 if __name__ == "__main__":
-    send_telegram_message("✅ Test manuel depuis Render !")
     run_bot()
+
 
 
