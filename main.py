@@ -40,7 +40,7 @@ def fetch_ohlcv(symbol, timeframe="30m"):
         print(f"Erreur fetch {symbol} : {e}")
         return None
 
-def apply_indicators(df):
+def apply_classic_indicators(df):
     df["ema50"] = ta.trend.ema_indicator(df["close"], window=50).ema_indicator()
     df["ema200"] = ta.trend.ema_indicator(df["close"], window=200).ema_indicator()
     df["macd"] = ta.trend.macd_diff(df["close"])
@@ -48,10 +48,23 @@ def apply_indicators(df):
     df.dropna(inplace=True)
     return df
 
-def check_direction(df):
+def apply_scalping_indicators(df):
+    df["stoch_rsi_k"] = ta.momentum.stochrsi_k(df["close"])
+    df["williams_r"] = ta.momentum.williams_r(df["high"], df["low"], df["close"], lbp=14)
+    df["rsi_fast"] = ta.momentum.rsi(df["close"], window=7)
+    df.dropna(inplace=True)
+    return df
+
+def check_classic_direction(df):
     last = df.iloc[-1]
     buy = last["close"] > last["ema50"] > last["ema200"] and last["macd"] > 0 and last["rsi"] > 50
     sell = last["close"] < last["ema50"] < last["ema200"] and last["macd"] < 0 and last["rsi"] < 50
+    return "Achat" if buy else ("Vente" if sell else None)
+
+def check_scalping_direction(df):
+    last = df.iloc[-1]
+    buy = last["stoch_rsi_k"] < 20 and last["williams_r"] < -80 and last["rsi_fast"] > 50
+    sell = last["stoch_rsi_k"] > 80 and last["williams_r"] > -20 and last["rsi_fast"] < 50
     return "Achat" if buy else ("Vente" if sell else None)
 
 def calculate_tp_sl(entry, direction, rr=2.0):
@@ -77,7 +90,15 @@ def register_alert(symbol, direction):
     symbol_last_alert[symbol] = {"direction": direction, "time": datetime.now()}
 
 def send_signal(symbol, direction, entry, tp, sl, rr, confiance, mode, tf):
-    message = f"<b>{symbol}</b> [{mode}]\n<b>Confiance:</b> {confiance}\n<b>Signal:</b> {direction}\n<b>Entrée:</b> {entry}\n<b>TP:</b> {tp}\n<b>SL:</b> {sl}\n<b>RR:</b> {rr}\n<b>TF:</b> {tf}\n<b>Heure:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    message = f"<b>{symbol}</b> [{mode}]
+<b>Confiance:</b> {confiance}
+<b>Signal:</b> {direction}
+<b>Entrée:</b> {entry}
+<b>TP:</b> {tp}
+<b>SL:</b> {sl}
+<b>RR:</b> {rr}
+<b>TF:</b> {tf}
+<b>Heure:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     send_telegram_message(message)
     active_trades[f"{symbol}_{mode}"] = {
         "direction": direction,
@@ -97,8 +118,12 @@ def detect_signal(symbol, mode):
         df = fetch_ohlcv(symbol, tf)
         if df is None:
             continue
-        df = apply_indicators(df)
-        direction = check_direction(df)
+        if mode == "classique":
+            df = apply_classic_indicators(df)
+            direction = check_classic_direction(df)
+        else:
+            df = apply_scalping_indicators(df)
+            direction = check_scalping_direction(df)
         if direction:
             confirmations.append(direction)
 
@@ -114,6 +139,7 @@ def detect_signal(symbol, mode):
     rr = 1.5 if mode == "scalping" else 2.0
     tp, sl = calculate_tp_sl(entry, final_direction, rr)
     confiance = "🔐 Signal très fiable" if len(confirmations) >= 3 else "⚠️ Signal modéré"
+
     send_signal(symbol, final_direction, entry, tp, sl, rr, confiance, mode, ",".join(timeframes[mode]))
 
 def check_tp_sl():
@@ -132,7 +158,7 @@ def check_tp_sl():
 
         duration = int((now - trade["time"]).total_seconds() / 60)
         pips = round(abs(price - trade["entrée"]), 2)
-        msg = f"📍 {result} touché sur {symbol} ({pips} pips, {duration} min)"
+        msg = f"{result} touché sur {symbol} ({pips} pips, {duration} min)"
         send_telegram_message(msg)
         trade_history.append({"hit": result, "symbol": symbol})
         del active_trades[key]
@@ -142,9 +168,20 @@ def weekly_recap():
     tp = sum(1 for t in trade_history if t["hit"] == "TP")
     sl = sum(1 for t in trade_history if t["hit"] == "SL")
     wr = round((tp / total) * 100, 1) if total else 0
-    msg = f"📅 Récap Hebdo\nTP: {tp}\nSL: {sl}\nWin Rate: {wr}%"
+    msg = f"📅 Récap Hebdo
+TP: {tp}
+SL: {sl}
+Win Rate: {wr}%"
     send_telegram_message(msg)
     trade_history.clear()
+
+def test_bot():
+    send_telegram_message("🔁 Test automatique du bot effectué avec succès.")
+    send_telegram_message("✅ TP touché sur BTC/USDT (120 pips, 15 min)")
+    send_telegram_message("📅 Récap Hebdo
+TP: 5
+SL: 2
+Win Rate: 71.4%")
 
 def run_bot():
     schedule.every().sunday.at("22:00").do(weekly_recap)
@@ -156,12 +193,6 @@ def run_bot():
             detect_signal(symbol, "scalping")
         schedule.run_pending()
         time.sleep(SCAN_INTERVAL)
-
-# === TEST AUTO A LA FIN ===
-def test_bot():
-    send_telegram_message("🔁 Test automatique du bot effectué avec succès.")
-    send_telegram_message("✅ TP touché sur BTC/USDT (120 pips, 15 min)")
-    send_telegram_message("📅 Récap Hebdo\nTP: 5\nSL: 2\nWin Rate: 71.4%")
 
 if __name__ == "__main__":
     test_bot()
