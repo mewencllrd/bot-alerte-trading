@@ -171,7 +171,7 @@ def weekly_recap():
     msg = f"📅 Récap Hebdo\n"
 TP: {tp}
 SL: {sl}
-Win Rate: {wr}%"
+msg = f"📊 Taux de victoire : {wr} %"
     send_telegram_message(msg)
     trade_history.clear()
 
