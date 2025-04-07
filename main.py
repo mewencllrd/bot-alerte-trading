@@ -116,16 +116,28 @@ def detect_signal(symbol, mode):
         "scalping": ["1m", "5m", "10m"]
     }
     confirmations = []
+    for tf in timeframes[mode]:
+        try:
+            df = fetch_ohlcv(symbol, tf)
+            if df is None:
+                print(f"[DEBUG] ❌ Données manquantes pour {symbol} sur {tf} ({mode})")
+                continue
 
-    for tf in timeframes[mode]:  # 👈 CORRECTION ICI
-       try:
-    df = fetch_ohlcv(symbol, tf)
-    if df is None:
-        print(f"[DEBUG] 🔴 Données manquantes pour {symbol} sur {tf} ({mode})")
-        continue
-except Exception as e:
-    print(f"[ERREUR] ⚠️ Erreur lors du fetch OHLCV pour {symbol} {tf} ({mode}) → {e}")
-    continue
+            if mode == "classique":
+                df = apply_classic_indicators(df)
+                direction = check_classic_direction(df)
+            else:
+                df = apply_scalping_indicators(df)
+                direction = check_scalping_direction(df)
+
+            if direction:
+                confirmations.append(direction)
+                print(f"[DEBUG] ✅ Signal détecté ({direction}) pour {symbol} sur {tf} ({mode})")
+            else:
+                print(f"[DEBUG] ❌ Aucun signal sur {symbol} {tf} ({mode})")
+
+        except Exception as e:
+            print(f"[ERREUR] ⚠️ Erreur sur {symbol} {tf} ({mode}) → {e}")
                if mode == "classique":
             df = apply_classic_indicators(df)
             direction = check_classic_direction(df)
