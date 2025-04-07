@@ -177,18 +177,17 @@ def weekly_recap():
 
 def test_bot():
     send_telegram_message("✅ Test automatique du bot effectué avec succès.")
-    send_telegram_message("🟢 TP touché sur BTC/USDT (120 pips, 15 min)")
-    
+    send_telegram_message("📗 TP touché sur BTC/USDT (120 pips, 15 min)")
+
     tp = 3
     sl = 1
     winrate = 75  # ou une valeur calculée
 
-    send_telegram_message(f"📊 Récap Hebdo 📉 \nTP atteints : {tp}\nSL touchés : {sl}\nTaux de victoire : {winrate} %")
+    send_telegram_message(f"📊 Récap Hebdo 🧾\nTP atteints : {tp}\nSL touchés : {sl}\nTaux de victoire : {winrate} %")
 
-
-TP: 5
-SL: 2
-msg = f"📊 Taux de réussite : {wr} %"
+    wr = round((tp / (tp + sl)) * 100, 1)
+    msg = f"📈 Taux de réussite : {wr} %"
+    send_telegram_message(msg)
 
 def run_bot():
     schedule.every().sunday.at("22:00").do(weekly_recap)
