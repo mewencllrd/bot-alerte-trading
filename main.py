@@ -90,7 +90,7 @@ def register_alert(symbol, direction):
     symbol_last_alert[symbol] = {"direction": direction, "time": datetime.now()}
 
 def send_signal(symbol, direction, entry, tp, sl, rr, confiance, mode, tf):
- message = f"""<b>{symbol}</b> [{mode}]
+    message = f"""<b>{symbol}</b> [{mode}]
 <b>Confiance:</b> {confiance}
 <b>Signal:</b> {direction}
 <b>Entrée:</b> {entry}
@@ -99,7 +99,9 @@ def send_signal(symbol, direction, entry, tp, sl, rr, confiance, mode, tf):
 <b>RR:</b> {rr}
 <b>TF:</b> {tf}
 <b>Heure :</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+    
     send_telegram_message(message)
+
     active_trades[f"{symbol}_{mode}"] = {
         "direction": direction,
         "entrée": entry,
