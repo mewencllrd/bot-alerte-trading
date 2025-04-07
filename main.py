@@ -12,14 +12,19 @@ TELEGRAM_TOKEN = "TON_TOKEN"
 TELEGRAM_CHAT_ID = -1002516223605
 SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"]
 SCAN_INTERVAL = 60
-
-exchange = ccxt.binance()
 active_trades = {}
 trade_history = []
+symbol_last_alert = {}
+
+exchange = ccxt.binance()
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
     try:
         requests.post(url, data=data)
     except Exception as e:
@@ -43,6 +48,12 @@ def apply_indicators(df):
     df.dropna(inplace=True)
     return df
 
+def check_direction(df):
+    last = df.iloc[-1]
+    buy = last["close"] > last["ema50"] > last["ema200"] and last["macd"] > 0 and last["rsi"] > 50
+    sell = last["close"] < last["ema50"] < last["ema200"] and last["macd"] < 0 and last["rsi"] < 50
+    return "Achat" if buy else ("Vente" if sell else None)
+
 def calculate_tp_sl(entry, direction, rr=2.0):
     if direction == "Achat":
         sl = entry - (entry * 0.003)
@@ -52,52 +63,59 @@ def calculate_tp_sl(entry, direction, rr=2.0):
         tp = entry - ((sl - entry) * rr)
     return round(tp, 2), round(sl, 2)
 
-def is_new_signal(symbol, direction, mode):
-    key = f"{symbol}_{mode}"
-    if key in active_trades:
-        return False
-    return True
+def fetch_price(symbol):
+    return exchange.fetch_ticker(symbol)["last"]
 
-def send_signal(symbol, direction, entry, tp, sl, rr, confiance, tf, mode):
-    msg = f"{symbol} [{confiance}]\nSignal : {direction}\nEntrée : {entry}\nTP : {tp}\nSL : {sl}\nRR : {rr}\nTF : {tf}"
-    send_telegram_message(msg)
-    key = f"{symbol}_{mode}"
-    active_trades[key] = {"direction": direction, "entrée": entry, "tp": tp, "sl": sl, "time": datetime.now()}
+def is_duplicate_alert(symbol, direction):
+    if symbol in symbol_last_alert:
+        last = symbol_last_alert[symbol]
+        if last["direction"] == direction and (datetime.now() - last["time"]).seconds < 900:
+            return True
+    return False
+
+def register_alert(symbol, direction):
+    symbol_last_alert[symbol] = {"direction": direction, "time": datetime.now()}
+
+def send_signal(symbol, direction, entry, tp, sl, rr, confiance, mode, tf):
+    message = f"<b>{symbol}</b> [{mode}]\n<b>Confiance:</b> {confiance}\n<b>Signal:</b> {direction}\n<b>Entrée:</b> {entry}\n<b>TP:</b> {tp}\n<b>SL:</b> {sl}\n<b>RR:</b> {rr}\n<b>TF:</b> {tf}\n<b>Heure:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    send_telegram_message(message)
+    active_trades[f"{symbol}_{mode}"] = {
+        "direction": direction,
+        "entrée": entry,
+        "tp": tp,
+        "sl": sl,
+        "time": datetime.now()
+    }
 
 def detect_signal(symbol, mode):
-    timeframes = {"classique": ["15m", "30m", "1h"], "scalping": ["1m", "5m", "10m"]}
-    confirmations = 0
-    directions = []
-
+    timeframes = {
+        "classique": ["15m", "30m", "1h"],
+        "scalping": ["1m", "5m", "10m"]
+    }
+    confirmations = []
     for tf in timeframes[mode]:
         df = fetch_ohlcv(symbol, tf)
         if df is None:
             continue
         df = apply_indicators(df)
-        last = df.iloc[-1]
-        buy = last["close"] > last["ema50"] > last["ema200"] and last["macd"] > 0 and last["rsi"] > 50
-        sell = last["close"] < last["ema50"] < last["ema200"] and last["macd"] < 0 and last["rsi"] < 50
-        if buy:
-            confirmations += 1
-            directions.append("Achat")
-        elif sell:
-            confirmations += 1
-            directions.append("Vente")
+        direction = check_direction(df)
+        if direction:
+            confirmations.append(direction)
 
-    if confirmations < 2:
+    if len(confirmations) < 2:
         return
 
-    direction = max(set(directions), key=directions.count)
+    final_direction = max(set(confirmations), key=confirmations.count)
+    if is_duplicate_alert(symbol + "_" + mode, final_direction):
+        return
+    register_alert(symbol + "_" + mode, final_direction)
+
     entry = fetch_price(symbol)
     rr = 1.5 if mode == "scalping" else 2.0
-    tp, sl = calculate_tp_sl(entry, direction, rr)
+    tp, sl = calculate_tp_sl(entry, final_direction, rr)
+    confiance = "🔐 Signal très fiable" if len(confirmations) >= 3 else "⚠️ Signal modéré"
 
-    confiance = "🔐 Signal très fiable" if confirmations >= 3 else "⚠️ Signal modéré"
-    if is_new_signal(symbol, direction, mode):
-        send_signal(symbol, direction, entry, tp, sl, rr, confiance, ",".join(timeframes[mode]), mode)
-
-def fetch_price(symbol):
-    return exchange.fetch_ticker(symbol)["last"]
+    send_signal(symbol, final_direction, entry, tp, sl, rr, confiance, mode, ",".join(timeframes[mode]))
 
 def check_tp_sl():
     now = datetime.now()
@@ -106,27 +124,32 @@ def check_tp_sl():
         symbol = key.split("_")[0]
         price = fetch_price(symbol)
         direction = trade["direction"]
-        tp_hit = price >= trade["tp"] if direction == "Achat" else price <= trade["tp"]
-        sl_hit = price <= trade["sl"] if direction == "Achat" else price >= trade["sl"]
-        if tp_hit or sl_hit:
-            result = "TP" if tp_hit else "SL"
-            pips = abs(price - trade["entrée"])
-            duration = int((now - trade["time"]).total_seconds() / 60)
-            send_telegram_message(f"{result} touché sur {symbol} ({pips} points, {duration} min)")
-            trade_history.append({"hit": result, "symbol": symbol})
-            del active_trades[key]
+        if direction == "Achat" and price >= trade["tp"] or direction == "Vente" and price <= trade["tp"]:
+            result = "TP"
+        elif direction == "Achat" and price <= trade["sl"] or direction == "Vente" and price >= trade["sl"]:
+            result = "SL"
+        else:
+            continue
+
+        duration = int((now - trade["time"]).total_seconds() / 60)
+        pips = round(abs(price - trade["entrée"]), 2)
+        msg = f"{result} touché sur {symbol} ({pips} pips, {duration} min)"
+        send_telegram_message(msg)
+        trade_history.append({"hit": result, "symbol": symbol})
+        del active_trades[key]
 
 def weekly_recap():
     total = len(trade_history)
     tp = sum(1 for t in trade_history if t["hit"] == "TP")
     sl = sum(1 for t in trade_history if t["hit"] == "SL")
     wr = round((tp / total) * 100, 1) if total else 0
-    send_telegram_message(f"📊 Récapitulatif Hebdo\nTP : {tp}\nSL : {sl}\nWin Rate : {wr}%")
+    msg = f"📅 Récap Hebdo\nTP: {tp}\nSL: {sl}\nWin Rate: {wr}%"
+    send_telegram_message(msg)
     trade_history.clear()
 
 def run_bot():
     schedule.every().sunday.at("22:00").do(weekly_recap)
-    send_telegram_message("✅ Bot lancé")
+    send_telegram_message("✅ Bot de trading activé.")
     while True:
         check_tp_sl()
         for symbol in SYMBOLS:
