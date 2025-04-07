@@ -116,9 +116,10 @@ def detect_signal(symbol, mode):
         "scalping": ["1m", "5m", "10m"]
     }
     confirmations = []
-   for tf in timeframes[mode]:
-    try:
-        df = fetch_ohlcv(symbol, tf)
+
+    for tf in timeframes[mode]:  # 👈 CORRECTION ICI
+        try:
+            df = fetch_ohlcv(symbol, tf)
         if df is None:
             print(f"[DEBUG] ⛔ Données manquantes pour {symbol} sur {tf} ({mode})")
             continue
