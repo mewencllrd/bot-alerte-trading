@@ -118,11 +118,14 @@ def detect_signal(symbol, mode):
     confirmations = []
 
     for tf in timeframes[mode]:  # 👈 CORRECTION ICI
-        try:
-            df = fetch_ohlcv(symbol, tf)
-        if df is None:
-            print(f"[DEBUG] ⛔ Données manquantes pour {symbol} sur {tf} ({mode})")
-            continue
+       try:
+    df = fetch_ohlcv(symbol, tf)
+    if df is None:
+        print(f"[DEBUG] 🔴 Données manquantes pour {symbol} sur {tf} ({mode})")
+        continue
+except Exception as e:
+    print(f"[ERREUR] ⚠️ Erreur lors du fetch OHLCV pour {symbol} {tf} ({mode}) → {e}")
+    continue
                if mode == "classique":
             df = apply_classic_indicators(df)
             direction = check_classic_direction(df)
