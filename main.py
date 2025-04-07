@@ -168,7 +168,7 @@ def weekly_recap():
     tp = sum(1 for t in trade_history if t["hit"] == "TP")
     sl = sum(1 for t in trade_history if t["hit"] == "SL")
     wr = round((tp / total) * 100, 1) if total else 0
-    msg = f"📅 Récap Hebdo
+    msg = f"📅 Récap Hebdo\n"
 TP: {tp}
 SL: {sl}
 Win Rate: {wr}%"
