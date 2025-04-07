@@ -186,7 +186,7 @@ send_telegram_message(f"📊 Récap Hebdo 📉\nTP atteints : {tp}\nSL touchés 
 
 TP: 5
 SL: 2
-Win Rate: 71.4%")
+msg = f"📊 Taux de réussite : {wr} %"
 
 def run_bot():
     schedule.every().sunday.at("22:00").do(weekly_recap)
