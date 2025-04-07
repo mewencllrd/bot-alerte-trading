@@ -98,7 +98,7 @@ def send_signal(symbol, direction, entry, tp, sl, rr, confiance, mode, tf):
 <b>SL:</b> {sl}
 <b>RR:</b> {rr}
 <b>TF:</b> {tf}
-<b>Heure:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+message = f"<b>Heure :</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     send_telegram_message(message)
     active_trades[f"{symbol}_{mode}"] = {
         "direction": direction,
