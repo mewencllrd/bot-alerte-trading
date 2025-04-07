@@ -170,10 +170,8 @@ def weekly_recap():
     tp = sum(1 for t in trade_history if t["hit"] == "TP")
     sl = sum(1 for t in trade_history if t["hit"] == "SL")
     wr = round((tp / total) * 100, 1) if total else 0
-    msg = f"📅 Récap Hebdo\n"
-TP: {tp}
-SL: {sl}
-msg = f"📊 Taux de victoire : {wr} %"
+    msg = f"📊 Récap Hebdo\n\nTP: {tp}\nSL: {sl}\n"
+    msg += f"🔁 Taux de victoire : {wr} %"
     send_telegram_message(msg)
     trade_history.clear()
 
