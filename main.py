@@ -182,7 +182,7 @@ def test_bot():
 sl = 1
 winrate = 75
 
-send_telegram_message(f"📊 Récap Hebdo 📈\nTP atteints : {tp}\nSL touchés : {sl}\nTaux de victoire : {winrate}%")
+send_telegram_message(f"📊 Récap Hebdo 📉\nTP atteints : {tp}\nSL touchés : {sl}\nTaux de victoire : {winrate} %")
 
 TP: 5
 SL: 2
