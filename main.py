@@ -178,7 +178,7 @@ msg = f"📊 Taux de victoire : {wr} %"
 def test_bot():
     send_telegram_message("🔁 Test automatique du bot effectué avec succès.")
     send_telegram_message("✅ TP touché sur BTC/USDT (120 pips, 15 min)")
-    send_telegram_message("📅 Récap Hebdo
+    send_telegram_message("📊 Récap Hebdo 📈")
 TP: 5
 SL: 2
 Win Rate: 71.4%")
