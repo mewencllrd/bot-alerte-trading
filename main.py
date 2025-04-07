@@ -138,7 +138,7 @@ for tf in timeframes[mode]:
 
     except Exception as e:
         print(f"[ERREUR] ⚠️ Erreur lors du fetch ou analyse {symbol} {tf} ({mode}) → {e}")
-               if mode == "classique":
+        if mode == "classique":
             df = apply_classic_indicators(df)
             direction = check_classic_direction(df)
         else:
