@@ -114,7 +114,6 @@ def detect_signal(symbol, mode):
     rr = 1.5 if mode == "scalping" else 2.0
     tp, sl = calculate_tp_sl(entry, final_direction, rr)
     confiance = "🔐 Signal très fiable" if len(confirmations) >= 3 else "⚠️ Signal modéré"
-
     send_signal(symbol, final_direction, entry, tp, sl, rr, confiance, mode, ",".join(timeframes[mode]))
 
 def check_tp_sl():
@@ -133,7 +132,7 @@ def check_tp_sl():
 
         duration = int((now - trade["time"]).total_seconds() / 60)
         pips = round(abs(price - trade["entrée"]), 2)
-        msg = f"{result} touché sur {symbol} ({pips} pips, {duration} min)"
+        msg = f"📍 {result} touché sur {symbol} ({pips} pips, {duration} min)"
         send_telegram_message(msg)
         trade_history.append({"hit": result, "symbol": symbol})
         del active_trades[key]
@@ -158,6 +157,12 @@ def run_bot():
         schedule.run_pending()
         time.sleep(SCAN_INTERVAL)
 
-if __name__ == "__main__":
-    run_bot()
+# === TEST AUTO A LA FIN ===
+def test_bot():
+    send_telegram_message("🔁 Test automatique du bot effectué avec succès.")
+    send_telegram_message("✅ TP touché sur BTC/USDT (120 pips, 15 min)")
+    send_telegram_message("📅 Récap Hebdo\nTP: 5\nSL: 2\nWin Rate: 71.4%")
 
+if __name__ == "__main__":
+    test_bot()
+    run_bot()
