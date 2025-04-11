@@ -1,0 +1,1 @@
+# fonctions de détection des signaux (scalping + classique)

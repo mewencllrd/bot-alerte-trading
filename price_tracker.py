@@ -1,0 +1,1 @@
+# suivi TP/SL en temps réel avec pips + durée
