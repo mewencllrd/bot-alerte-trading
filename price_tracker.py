@@ -1,50 +1,27 @@
-import time
-from indicators import detect_classic_signal, detect_scalping_signal
+from indicators import get_bitget_ohlcv, detect_classic_signal, detect_scalping_signal
 from telegram_bot import send_signal_alert
+import time
 
 def launch_price_check_loop():
-    print("🔵 Lancement de la surveillance des prix...")
-
-    last_signal_sent = None
+    print("🔍 Lancement de la surveillance des prix...")
+    last_signal = None
 
     while True:
-        # --- Données simulées des indicateurs (à remplacer plus tard par les vraies valeurs) ---
+        df = get_bitget_ohlcv()
+        signal_classic = detect_classic_signal(df)
+        signal_scalping = detect_scalping_signal(df)
 
-        classic_data = {
-            "ssl_hybrid": True,
-            "macd_mtf": True,
-            "price_action": True
-        }
+        last_price = df["close"].iloc[-1]
+        atr = df["atr"].iloc[-1] if "atr" in df.columns else None
 
-        scalping_data = {
-            "stoch_rsi": True,
-            "vwap": True,
-            "supertrend": True
-        }
+        if signal_classic and signal_classic != last_signal:
+            send_signal_alert(type_signal=signal_classic, niveau="fiable", mode="classique", price=last_price, atr=atr)
+            last_signal = signal_classic
 
-        # --- Analyse des signaux ---
-        classic_signal = detect_classic_signal(classic_data)
-        scalping_signal = detect_scalping_signal(scalping_data)
+        if signal_scalping and signal_scalping != last_signal:
+            send_signal_alert(type_signal=signal_scalping, niveau="fiable", mode="scalping", price=last_price, atr=atr)
+            last_signal = signal_scalping
 
-        print("🔍 Signal classique :", classic_signal)
-        print("⚡ Signal scalping :", scalping_signal)
+        time.sleep(60)
 
-        # --- Envoi Telegram si un nouveau signal détecté ---
-        if classic_signal != last_signal_sent and classic_signal is not None:
-            send_signal_alert(
-                type_signal="long" if classic_signal == "fiable" else "short",
-                niveau=classic_signal,
-                mode="classique"
-            )
-            last_signal_sent = classic_signal
-
-        elif scalping_signal != last_signal_sent and scalping_signal is not None:
-            send_signal_alert(
-                type_signal="long" if scalping_signal == "fiable" else "short",
-                niveau=scalping_signal,
-                mode="scalping"
-            )
-            last_signal_sent = scalping_signal
-
-        time.sleep(60)  # Scan toutes les 60 secondes
 
