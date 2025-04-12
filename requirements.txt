@@ -4,6 +4,5 @@ ta
 ccxt
 schedule
 python-telegram-bot
-pandas-ta
-numpy==1.24.3
+setuptools
 
