@@ -1,6 +1,6 @@
 requests
 pandas
-ta
+pandas-ta
 ccxt
 schedule
 python-telegram-bot
