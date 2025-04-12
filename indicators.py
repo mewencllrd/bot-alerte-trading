@@ -1,75 +1,48 @@
-import ccxt
+import requests
 import pandas as pd
-import merci
+import pandas_ta as ta
 
-# === MODE CLASSIQUE ===
+# --- Récupère les données réelles depuis Bitget ---
+def get_bitget_ohlcv(symbol="btc_usdt", interval="15m", limit=100):
+    url = f"https://api.bitget.com/api/v2/spot/market/candles?symbol={symbol}&granularity={interval}&limit={limit}"
+    response = requests.get(url)
+    data = response.json()["data"]
+    df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df = df.astype(float)
+    df.set_index("timestamp", inplace=True)
+    return df
+
+# --- Mode classique (M15 / M30 / H1) ---
 def detect_classic_signal(df):
-    """
-    Détection de signaux pour le mode classique (SSL Hybrid, MACD, Price Action...)
-    Délais utilisés : M15, M30, H1
-    """
-    df['ema_50'] = merci.tendance.ema_indicator(df['close'], window=50)
-    df['ema_200'] = merci.tendance.ema_indicator(df['close'], window=200)
+    df["EMA_50"] = ta.ema(df["close"], length=50)
+    df["EMA_200"] = ta.ema(df["close"], length=200)
+    macd = ta.macd(df["close"])
+    df["MACD_hist"] = macd["MACDh_12_26_9"]
 
-    macd = merci.tendance.macd_diff(df['close'])
-    df['macd_hist'] = macd
+    last = df.iloc[-1]
 
-    signal_long = (
-        df['close'].iloc[-1] > df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1] and
-        df['macd_hist'].iloc[-1] > 0
-    )
-
-    signal_short = (
-        df['close'].iloc[-1] < df['ema_50'].iloc[-1] < df['ema_200'].iloc[-1] and
-        df['macd_hist'].iloc[-1] < 0
-    )
+    signal_long = last["EMA_50"] > last["EMA_200"] and last["MACD_hist"] > 0
+    signal_short = last["EMA_50"] < last["EMA_200"] and last["MACD_hist"] < 0
 
     if signal_long:
         return "long"
     elif signal_short:
         return "short"
-    else:
-        return "none"
+    return "none"
 
-# === MODE SCALPING RAPIDE ===
+# --- Mode scalping rapide (M1 / M5 / M10) ---
 def detect_scalping_signal(df):
-    """
-    Détection de signaux pour le scalping rapide
-    Indicateurs : Supertend, VWAP, Stoch RSI
-    Délais utilisés : M1, M5, M10
-    """
-    # Stoch RSI
-    stoch_k = merci.élan.stochrsi_k(df['close'])
-    stoch_d = merci.élan.stochrsi_d(df['close'])
+    stoch = ta.stochrsi(df["close"], length=14)
+    df["K"], df["D"] = stoch.iloc[:, 0], stoch.iloc[:, 1]
+    df["VWAP"] = ta.vwap(df["high"], df["low"], df["close"], df["volume"])
 
-    df['stoch_k'] = stoch_k
-    df['stoch_d'] = stoch_d
-
-    # VWAP approximation avec cumulation volume
-    df['VWAP'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
-
-    # Supertendance
-    high = df['high']
-    low = df['low']
-    close = df['close']
-    supertrend = merci.tendance.STC(close=close, fillna=True)
-    df['Supertrend'] = supertrend
-
-    signal_long = (
-        df['close'].iloc[-1] > df['VWAP'].iloc[-1] and
-        df['stoch_k'].iloc[-1] > df['stoch_d'].iloc[-1] and
-        df['Supertrend'].iloc[-1] > df['Supertrend'].iloc[-2]
-    )
-
-    signal_short = (
-        df['close'].iloc[-1] < df['VWAP'].iloc[-1] and
-        df['stoch_k'].iloc[-1] < df['stoch_d'].iloc[-1] and
-        df['Supertrend'].iloc[-1] < df['Supertrend'].iloc[-2]
-    )
+    last = df.iloc[-1]
+    signal_long = last["K"] > 80 and last["K"] > last["D"] and last["close"] > last["VWAP"]
+    signal_short = last["K"] < 20 and last["K"] < last["D"] and last["close"] < last["VWAP"]
 
     if signal_long:
         return "long"
     elif signal_short:
         return "short"
-    else:
-        return "none"
+    return "none"
