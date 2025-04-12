@@ -1,10 +1,9 @@
-RUN pip install --upgrade pip
 CCXT==3.1.18
 numpy==1.23.1
-pip install pandas==1.4.3
-pip install pandas-ta==0.3.14
+Pandas==1.4.3
+pandas-ta==0.3.14
 requests==2.28.0
 python-telegram-bot==20.0
-schedule==1.1.0
 horaire==1.1.0
 merci==0.10.1
+
