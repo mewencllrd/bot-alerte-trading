@@ -2,58 +2,65 @@ import requests
 import pandas as pd
 import pandas_ta as ta
 
-# === Récupère les données réelles depuis Bitget ===
-def get_bitget_ohlcv(symbole="BTCUSDT", intervalle="15m", limite=100):
-    url = f"https://api.bitget.com/api/v2/spot/market/candles?symbol={symbole}&granularity={intervalle}&limit={limite}"
-    r = requests.get(url)
-    data = r.json().get("data", [])
+# === Récupère les données OHLC depuis Bitget ===
+def get_bitget_ohlcv(symbol="BTCUSDT", interval="15m", limit=100):
+    url = f"https://api.bitget.com/api/v2/spot/market/candles?symbol={symbol}&granularity={interval}&limit={limit}"
+    response = requests.get(url)
+    data = response.json()['data']
 
     df = pd.DataFrame(data, columns=[
-        "timestamp", "open", "high", "low", "close", "volume"])
-    df = df.iloc[::-1]  # met dans l'ordre chronologique
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df.set_index("timestamp", inplace=True)
-
-    numeric_cols = ["open", "high", "low", "close", "volume"]
-    df[numeric_cols] = df[numeric_cols].astype(float)
+        'timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df = df.astype(float)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
     return df
 
-# === MODE CLASSIQUE ===
+# === Mode CLASSIQUE : analyse M15/M30/H1 avec SSL Hybrid, MACD, Price Action ===
 def detect_classic_signal(df):
-    df.ta.ema(length=50, append=True)
-    df.ta.ema(length=200, append=True)
-    df.ta.macd(append=True)
+    df['ema50'] = ta.ema(df['close'], length=50)
+    df['ema200'] = ta.ema(df['close'], length=200)
+    macd = ta.macd(df['close'])
+    df['macd_hist'] = macd['MACDh_12_26_9']
 
-    last = df.iloc[-1]
-    ema_50 = last["EMA_50"]
-    ema_200 = last["EMA_200"]
-    macd_hist = last["MACDh_12_26_9"]
-    price = last["close"]
+    latest = df.iloc[-1]
+    signal_long = latest['ema50'] > latest['ema200'] and latest['macd_hist'] > 0
+    signal_short = latest['ema50'] < latest['ema200'] and latest['macd_hist'] < 0
 
-    if price > ema_50 > ema_200 and macd_hist > 0:
+    if signal_long:
         return "long"
-    elif price < ema_50 < ema_200 and macd_hist < 0:
+    elif signal_short:
         return "short"
-    else:
-        return "none"
+    return None
 
-# === MODE SCALPING ===
+# === Mode SCALPING : analyse M1/M5/M10 avec VWAP, Supertrend, Stoch RSI ===
 def detect_scalping_signal(df):
-    df.ta.stoch(length=14, append=True)
-    df.ta.vwap(append=True)
-    df.ta.supertrend(append=True)
+    stoch = ta.stochrsi(df['close'], length=14)
+    df['stoch_k'] = stoch['STOCHRSIk_14_14_3_3']
+    df['stoch_d'] = stoch['STOCHRSId_14_14_3_3']
 
-    last = df.iloc[-1]
-    stoch_k = last["STOCHk_14_3_3"]
-    stoch_d = last["STOCHd_14_3_3"]
-    price = last["close"]
-    vwap = last["VWAP_D"]
-    supertrend = last.get("SUPERT_7_3.0", None)
+    df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'])
+    supertrend = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3.0)
+    df['supertrend'] = supertrend['SUPERT_10_3.0']
 
-    if price > vwap and stoch_k > stoch_d and (supertrend is None or price > supertrend):
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    signal_long = (
+        latest['close'] > latest['vwap']
+        and latest['stoch_k'] > latest['stoch_d']
+        and latest['supertrend'] > prev['supertrend']
+    )
+
+    signal_short = (
+        latest['close'] < latest['vwap']
+        and latest['stoch_k'] < latest['stoch_d']
+        and latest['supertrend'] < prev['supertrend']
+    )
+
+    if signal_long:
         return "long"
-    elif price < vwap and stoch_k < stoch_d and (supertrend is None or price < supertrend):
+    elif signal_short:
         return "short"
-    else:
-        return "none"
+    return None
+
 
