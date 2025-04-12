@@ -1,43 +1,76 @@
-def detect_classic_signal(data):
-    """
-    Détection des signaux de trading en mode classique
-    avec les indicateurs : SSL Hybrid, MACD MTF, Price Action.
-    """
-    ssl_hybrid = data.get("ssl_hybrid")
-    macd_mtf = data.get("macd_mtf")
-    price_action = data.get("price_action")
+import ccxt
+import pandas as pd
+import ta
 
-    # Comptage des signaux alignés
-    score = 0
-    if ssl_hybrid: score += 1
-    if macd_mtf: score += 1
-    if price_action: score += 1
+# === MODE CLASSIQUE ===
+def detect_classic_signal(df):
+    """
+    Détection de signaux pour le mode classique (SSL Hybrid, MACD, Price Action...)
+    Timeframes utilisés : M15, M30, H1
+    """
+    df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
+    df['ema_200'] = ta.trend.ema_indicator(df['close'], window=200)
 
-    if score == 3:
-        return "très_fiable"
-    elif score == 2:
-        return "modéré"
-    elif score == 1:
-        return "pré_signal"
+    macd = ta.trend.macd_diff(df['close'])
+    df['macd_hist'] = macd
+
+    signal_long = (
+        df['close'].iloc[-1] > df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1] and
+        df['macd_hist'].iloc[-1] > 0
+    )
+
+    signal_short = (
+        df['close'].iloc[-1] < df['ema_50'].iloc[-1] < df['ema_200'].iloc[-1] and
+        df['macd_hist'].iloc[-1] < 0
+    )
+
+    if signal_long:
+        return "long"
+    elif signal_short:
+        return "short"
     else:
         return None
 
 
-def detect_scalping_signal(data):
+# === MODE SCALPING RAPIDE ===
+def detect_scalping_signal(df):
     """
-    Détection de signaux en mode scalping sur M1, M5, M10
-    avec : QQE Mod, Stochastic RSI, Volume Oscillator.
+    Détection de signaux pour le scalping rapide
+    Indicateurs : Supertrend, VWAP, Stoch RSI
+    Timeframes utilisés : M1, M5, M10
     """
-    qqe = data.get("qqe")
-    stoch_rsi = data.get("stoch_rsi")
-    volume = data.get("volume_oscillator")
+    # Stoch RSI
+    stoch = ta.momentum.stochrsi_k(df['close'])
+    stoch_d = ta.momentum.stochrsi_d(df['close'])
 
-    score = 0
-    if qqe: score += 1
-    if stoch_rsi: score += 1
-    if volume: score += 1
+    df['stoch_k'] = stoch
+    df['stoch_d'] = stoch_d
 
-    if score >= 2:
-        return "scalping"
+    # VWAP (approximation avec rolling VWAP sur la journée)
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+
+    # Supertrend
+    high = df['high']
+    low = df['low']
+    close = df['close']
+    supertrend = ta.trend.stc(close=close, fillna=True)  # Approximation ST via STC
+    df['supertrend'] = supertrend
+
+    signal_long = (
+        df['close'].iloc[-1] > df['vwap'].iloc[-1] and
+        df['stoch_k'].iloc[-1] > df['stoch_d'].iloc[-1] and
+        df['supertrend'].iloc[-1] > df['supertrend'].iloc[-2]
+    )
+
+    signal_short = (
+        df['close'].iloc[-1] < df['vwap'].iloc[-1] and
+        df['stoch_k'].iloc[-1] < df['stoch_d'].iloc[-1] and
+        df['supertrend'].iloc[-1] < df['supertrend'].iloc[-2]
+    )
+
+    if signal_long:
+        return "long"
+    elif signal_short:
+        return "short"
     else:
         return None
