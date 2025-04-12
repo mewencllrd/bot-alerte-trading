@@ -1,3 +1,3 @@
 print("✅ Bot lancé sur Railway")
-from indicateurs import *
+from indicators import *
 # ... (main bot fusionné ici)
