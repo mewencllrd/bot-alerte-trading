@@ -1,4 +1,7 @@
 requests
 pandas
-pandas_ta
+ta
+ccxt
+schedule
 python-telegram-bot
+numpy
