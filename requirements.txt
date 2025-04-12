@@ -1,8 +1,4 @@
 requests
 pandas
-pandas-ta
-ccxt
-schedule
+pandas_ta
 python-telegram-bot
-setuptools
-
