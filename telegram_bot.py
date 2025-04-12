@@ -2,8 +2,8 @@ import requests
 import os
 
 # 🧠 Variables d'environnement pour garder ton token et chat_id secrets
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_TOKEN = os.getenv("8050078976:AAEu6HHh7UtnSgVvzy0zUIa_TprcuT4IP10")
+TELEGRAM_CHAT_ID = os.getenv("-1002516223605")
 
 def send_signal_alert(type_signal="long", niveau="fiable", mode="classique"):
     """
@@ -41,3 +41,8 @@ def send_telegram_message(message):
             print("❌ Erreur envoi Telegram :", response.text)
     except Exception as e:
         print("❌ Exception envoi Telegram :", str(e))
+def start_bot():
+    print("🤖 Bot Telegram en cours de démarrage...")
+
+    from price_tracker import launch_price_check_loop
+    launch_price_check_loop()
