@@ -2,47 +2,58 @@ import requests
 import pandas as pd
 import pandas_ta as ta
 
-# --- Récupère les données réelles depuis Bitget ---
-def get_bitget_ohlcv(symbol="btc_usdt", interval="15m", limit=100):
-    url = f"https://api.bitget.com/api/v2/spot/market/candles?symbol={symbol}&granularity={interval}&limit={limit}"
-    response = requests.get(url)
-    data = response.json()["data"]
-    df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close", "volume"])
+# === Récupère les données réelles depuis Bitget ===
+def get_bitget_ohlcv(symbole="BTCUSDT", intervalle="15m", limite=100):
+    url = f"https://api.bitget.com/api/v2/spot/market/candles?symbol={symbole}&granularity={intervalle}&limit={limite}"
+    r = requests.get(url)
+    data = r.json().get("data", [])
+
+    df = pd.DataFrame(data, columns=[
+        "timestamp", "open", "high", "low", "close", "volume"])
+    df = df.iloc[::-1]  # met dans l'ordre chronologique
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df = df.astype(float)
     df.set_index("timestamp", inplace=True)
+
+    numeric_cols = ["open", "high", "low", "close", "volume"]
+    df[numeric_cols] = df[numeric_cols].astype(float)
     return df
 
-# --- Mode classique (M15 / M30 / H1) ---
+# === MODE CLASSIQUE ===
 def detect_classic_signal(df):
-    df["EMA_50"] = ta.ema(df["close"], length=50)
-    df["EMA_200"] = ta.ema(df["close"], length=200)
-    macd = ta.macd(df["close"])
-    df["MACD_hist"] = macd["MACDh_12_26_9"]
+    df.ta.ema(length=50, append=True)
+    df.ta.ema(length=200, append=True)
+    df.ta.macd(append=True)
 
     last = df.iloc[-1]
+    ema_50 = last["EMA_50"]
+    ema_200 = last["EMA_200"]
+    macd_hist = last["MACDh_12_26_9"]
+    price = last["close"]
 
-    signal_long = last["EMA_50"] > last["EMA_200"] and last["MACD_hist"] > 0
-    signal_short = last["EMA_50"] < last["EMA_200"] and last["MACD_hist"] < 0
-
-    if signal_long:
+    if price > ema_50 > ema_200 and macd_hist > 0:
         return "long"
-    elif signal_short:
+    elif price < ema_50 < ema_200 and macd_hist < 0:
         return "short"
-    return "none"
+    else:
+        return "none"
 
-# --- Mode scalping rapide (M1 / M5 / M10) ---
+# === MODE SCALPING ===
 def detect_scalping_signal(df):
-    stoch = ta.stochrsi(df["close"], length=14)
-    df["K"], df["D"] = stoch.iloc[:, 0], stoch.iloc[:, 1]
-    df["VWAP"] = ta.vwap(df["high"], df["low"], df["close"], df["volume"])
+    df.ta.stoch(length=14, append=True)
+    df.ta.vwap(append=True)
+    df.ta.supertrend(append=True)
 
     last = df.iloc[-1]
-    signal_long = last["K"] > 80 and last["K"] > last["D"] and last["close"] > last["VWAP"]
-    signal_short = last["K"] < 20 and last["K"] < last["D"] and last["close"] < last["VWAP"]
+    stoch_k = last["STOCHk_14_3_3"]
+    stoch_d = last["STOCHd_14_3_3"]
+    price = last["close"]
+    vwap = last["VWAP_D"]
+    supertrend = last.get("SUPERT_7_3.0", None)
 
-    if signal_long:
+    if price > vwap and stoch_k > stoch_d and (supertrend is None or price > supertrend):
         return "long"
-    elif signal_short:
+    elif price < vwap and stoch_k < stoch_d and (supertrend is None or price < supertrend):
         return "short"
-    return "none"
+    else:
+        return "none"
+
