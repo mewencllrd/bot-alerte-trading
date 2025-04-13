@@ -1,9 +1,8 @@
 CCXT==3.1.18
 numpy==1.23.1
-Pandas==1.4.3
+pandas==1.4.3
 pandas-ta==0.3.13
 requests==2.28.0
 python-telegram-bot==20.0
 horaire==1.1.0
 merci==0.10.1
-
